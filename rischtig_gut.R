@@ -1,23 +1,35 @@
 library(shiny)
 library(leaflet)
+library(highcharter)
 library(RColorBrewer)
 library(cancensus)
+library(lubridate)
+library(tidyverse)
+source("base_map.R")
 
-options(cancensus.api_key = "CensusMapper_f8a7e66b1263cfd8596e73babf6cc6b1")
-city_surrey <- get_census(dataset = 'CA16', 
-                          regions = list(CSD = "5915004"), 
-                          vectors = c(), labels = "detailed", 
-                          geo_format = "sf", level = 'CSD')
+# options(cancensus.api_key = "CensusMapper_f8a7e66b1263cfd8596e73babf6cc6b1")
+# city_surrey <- get_census(dataset = 'CA16', 
+#                           regions = list(CSD = "5915004"), 
+#                           vectors = c(), labels = "detailed", 
+#                           geo_format = "sf", level = 'CT')
 
 df <- readr::read_csv("final_df.csv") %>%
   tidyr::unite("date", YEAR, MONTH, sep = "-") %>%
   dplyr::mutate(date = lubridate::ymd(paste0(date, "-1"))) %>%
   dplyr::filter(lon > -123 & lon < -122 & lat < 49.5 & lat > 48.5)
 
+
+
 ui <- bootstrapPage(
   tags$style(type = "text/css", "html, body {width:100%;height:100%}"),
   leafletOutput("map", width = "100%", height = "100%"),
-  absolutePanel(top = 10, right = 10,
+  absolutePanel(top = 5, right = 5, draggable = TRUE, fixed = TRUE,
+                width = "20%", style = "z-index:500; min-width: 300px;",
+                
+                highchartOutput("selectstat")),
+  
+  absolutePanel(top = 60, left = 5, draggable = TRUE, fixed = TRUE,
+                width = "20%", style = "z-index:500; min-width: 200px;",
                 
                 
                 # choose a date range
@@ -96,23 +108,26 @@ server <- function(input, output, session) {
     if(length(input$incident) != 0 & 
        length(input$neighborhoods) != 0 & !input$postal_code) {
       
-      pal7 <- RColorBrewer::brewer.pal(7, "Set1")
-      leaf_pal <- colorFactor(palette = pal7, domain = df$INCIDENT_TYPE)
+      base_map(df, filteredData())
       
-      leafletProxy("map", data = filteredData()) %>%
-        clearMarkerClusters() %>%
-        clearControls() %>%
-        addCircleMarkers(clusterOptions = markerClusterOptions(),
-                         stroke = FALSE, fill = TRUE, fillOpacity = .7,
-                         color = ~leaf_pal(INCIDENT_TYPE),
-                         popup = paste("'<strong>'Neighborhood: '</strong>'", filteredData()$district, "<br/>",
-                                       "<strong>Address: </strong>", filteredData()$HUNDRED_BLOCK, "<br/>",
-                                       "<strong>Postal Code: </strong>", filteredData()$postal_code, "<br/>", 
-                                       "<strong>Date: </strong>", filteredData()$date, "<br/>")) %>%
-        addLegend("bottomright",
-                  pal = leaf_pal,
-                  values = ~INCIDENT_TYPE, title = "Category") %>%
-        addPolygons(data = city_surrey)
+      crime_rank <- filteredData() %>%
+        count(INCIDENT_TYPE) %>%
+        arrange(desc(n))
+      output$selectstat <- renderHighchart({
+        
+        hchart(crime_rank, "bar", hcaes(INCIDENT_TYPE, n)) %>% 
+          hc_colors("SteelBlue") %>% 
+          hc_title(text = paste("Number of Incident Types in the Municipality of Surrey")) %>% 
+          hc_subtitle(text = "") %>% 
+          hc_xAxis(title = list(text = ""), gridLineWidth = 0, minorGridLineWidth = 0) %>% 
+          hc_yAxis(title = list(text = "Incidents"), gridLineWidth = 0, minorGridLineWidth = 0) %>%
+          hc_legend(enabled = FALSE) %>% 
+          hc_tooltip(pointFormat = "Incidents: <b>{point.y}</b>") %>% 
+          hc_plotOptions(series = list(cursor = "default")) %>% 
+          hc_add_theme(hc_theme_smpl()) %>% 
+          hc_chart(backgroundColor = "transparent")
+        
+      })
       
     } else if(length(input$incident) != 0 & 
               length(input$neighborhoods) != 0 &
@@ -125,6 +140,7 @@ server <- function(input, output, session) {
       showModal(modalDialog(title = "Sorry!", 
                             tags$p("Your postal code is not in the selected neighborhood."),
                             tags$p("Give another one a try or expand the number of neighborhoods.")))
+      
     } else if(length(input$incident) != 0 & 
               length(input$neighborhoods) != 0 &
               length(input$postal) != 0 & input$postal_code &
@@ -133,22 +149,26 @@ server <- function(input, output, session) {
               dplyr::filter(district %in% input$neighborhoods) %>%
               nrow(.) != 0) {
       
-      pal7 <- RColorBrewer::brewer.pal(7, "Set1")
-      leaf_pal <- colorFactor(palette = pal7, domain = df$INCIDENT_TYPE)
+      base_map(df, filteredData())
       
-      leafletProxy("map", data = filteredData()) %>%
-        clearMarkerClusters() %>%
-        clearControls() %>%
-        addCircleMarkers(clusterOptions = markerClusterOptions(),
-                         stroke = FALSE, fill = TRUE, fillOpacity = .7,
-                         color = ~leaf_pal(INCIDENT_TYPE),
-                         popup = paste("'<strong>'Neighborhood: '</strong>'", filteredData()$district, "<br/>",
-                                       "<strong>Address: </strong>", filteredData()$HUNDRED_BLOCK, "<br/>",
-                                       "<strong>Postal Code: </strong>", filteredData()$postal_code, "<br/>", 
-                                       "<strong>Date: </strong>", filteredData()$date, "<br/>")) %>%
-        addLegend("bottomright",
-                  pal = leaf_pal,
-                  values = ~INCIDENT_TYPE, title = "Category")
+      crime_rank <- filteredData() %>%
+        count(INCIDENT_TYPE) %>%
+        arrange(desc(n))
+      output$selectstat <- renderHighchart({
+        
+        hchart(crime_rank, "bar", hcaes(INCIDENT_TYPE, n)) %>% 
+          hc_colors("SteelBlue") %>% 
+          hc_title(text = paste("Number of Incident Types in the Municipality of Surrey")) %>% 
+          hc_subtitle(text = "") %>% 
+          hc_xAxis(title = list(text = ""), gridLineWidth = 0, minorGridLineWidth = 0) %>% 
+          hc_yAxis(title = list(text = "Incidents"), gridLineWidth = 0, minorGridLineWidth = 0) %>%
+          hc_legend(enabled = FALSE) %>% 
+          hc_tooltip(pointFormat = "Incidents: <b>{point.y}</b>") %>% 
+          hc_plotOptions(series = list(cursor = "default")) %>% 
+          hc_add_theme(hc_theme_smpl()) %>% 
+          hc_chart(backgroundColor = "transparent")
+        
+      })
       
     } else {
       
