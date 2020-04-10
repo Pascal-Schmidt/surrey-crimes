@@ -6,12 +6,13 @@ library(cancensus)
 library(lubridate)
 library(tidyverse)
 source("base_map.R")
+source("highcharter_barplot.R")
 
-# options(cancensus.api_key = "CensusMapper_f8a7e66b1263cfd8596e73babf6cc6b1")
-# city_surrey <- get_census(dataset = 'CA16', 
-#                           regions = list(CSD = "5915004"), 
-#                           vectors = c(), labels = "detailed", 
-#                           geo_format = "sf", level = 'CT')
+options(cancensus.api_key = "CensusMapper_f8a7e66b1263cfd8596e73babf6cc6b1")
+city_surrey <- get_census(dataset = 'CA16',
+                          regions = list(CSD = "5915004"),
+                          vectors = c(), labels = "detailed",
+                          geo_format = "sf", level = 'CT')
 
 df <- readr::read_csv("final_df.csv") %>%
   tidyr::unite("date", YEAR, MONTH, sep = "-") %>%
@@ -21,39 +22,45 @@ df <- readr::read_csv("final_df.csv") %>%
 
 
 ui <- bootstrapPage(
-  tags$style(type = "text/css", "html, body {width:100%;height:100%}"),
-  leafletOutput("map", width = "100%", height = "100%"),
-  absolutePanel(top = 5, right = 5, draggable = TRUE, fixed = TRUE,
-                width = "20%", style = "z-index:500; min-width: 300px;",
-                
-                highchartOutput("selectstat")),
   
-  absolutePanel(top = 60, left = 5, draggable = TRUE, fixed = TRUE,
-                width = "20%", style = "z-index:500; min-width: 200px;",
-                
-                
-                # choose a date range
-                shiny::dateRangeInput("range", "Date", 
-                                      start = lubridate::ymd("2019-01-01"), end = max(df$date),
-                                      min = min(df$date), max = max(df$date),
-                                      format = "yyyy/mm/dd",
-                                      separator = "-"),
-                
-                # choose a neighborhood
-                shiny::selectInput("neighborhoods", "Neighborhoods",
-                                   choices = unique(df$district), multiple = TRUE,
-                                   selected = "Whalley"),
-                
-                # choose the incident type
-                shiny::selectInput("incident", "Incident Type",
-                                   choices = unique(df$INCIDENT_TYPE), multiple = TRUE,
-                                   selected = df %>%
-                                     dplyr::filter(district == "Whalley") %>%
-                                     dplyr::pull(INCIDENT_TYPE) %>%
-                                     { unique(.)[1:3] }),
-                
-                shiny::checkboxInput("postal_code", "Search for Your Postal Code!"),
-                shiny::uiOutput("postal_surrey")))
+  navbarPage("City of Surrey Map of Crime Incidents", id = "main",
+             tabPanel("Map", 
+                      style = "height:500px;",
+                      
+                      leafletOutput("map", width = "100%", height = "100%"),
+                      absolutePanel(top = 70, right = 20, draggable = TRUE, fixed = TRUE,
+                                    width = "20%", style = "z-index:500; min-width: 300px;",
+                                    
+                                    highchartOutput("selectstat")),
+                      
+                      absolutePanel(top = 150, left = 20, draggable = TRUE, fixed = TRUE,
+                                    width = "20%", style = "z-index:500; min-width: 200px;",
+                                    
+                                    
+                                    # choose a date range
+                                    shiny::dateRangeInput("range", "Date", 
+                                                          start = lubridate::ymd("2019-01-01"), end = max(df$date),
+                                                          min = min(df$date), max = max(df$date),
+                                                          format = "yyyy/mm/dd",
+                                                          separator = "-"),
+                                    
+                                    # choose a neighborhood
+                                    shiny::selectInput("neighborhoods", "Neighborhoods",
+                                                       choices = unique(df$district), multiple = TRUE,
+                                                       selected = "Whalley"),
+                                    
+                                    # choose the incident type
+                                    shiny::selectInput("incident", "Incident Type",
+                                                       choices = unique(df$INCIDENT_TYPE), multiple = TRUE,
+                                                       selected = df %>%
+                                                         dplyr::filter(district == "Whalley") %>%
+                                                         dplyr::pull(INCIDENT_TYPE) %>%
+                                                         { unique(.)[1:3] }),
+                                    
+                                    shiny::checkboxInput("postal_code", "Search for Your Postal Code!"),
+                                    shiny::uiOutput("postal_surrey"),
+                                    
+                                    shiny::checkboxInput("boundaries", "Add Boundaries Around Surrey")))))
 
 server <- function(input, output, session) {
   
@@ -61,14 +68,14 @@ server <- function(input, output, session) {
   filteredData <- reactive({
     
     if(!input$postal_code) {
-      df[df$date >= input$range[1] & df$date <= input$range[2],]
+      df <- df[df$date >= input$range[1] & df$date <= input$range[2],]
       df <- df[df$district %in% input$neighborhoods, ]
       df <- df[df$INCIDENT_TYPE %in% input$incident, ]
       df
       
     } else {
       
-      df[df$date >= input$range[1] & df$date <= input$range[2],]
+      df <- df[df$date >= input$range[1] & df$date <= input$range[2],]
       df <- df[df$district %in% input$neighborhoods, ]
       df <- df[df$postal_code %in% input$postal, ]
       df <- df[df$INCIDENT_TYPE %in% input$incident, ]
@@ -76,7 +83,7 @@ server <- function(input, output, session) {
       
     }
   })
-  
+
   output$postal_surrey <- renderUI({
     
     if(input$postal_code) {
@@ -108,26 +115,30 @@ server <- function(input, output, session) {
     if(length(input$incident) != 0 & 
        length(input$neighborhoods) != 0 & !input$postal_code) {
       
-      base_map(df, filteredData())
+      # map
+      m <- base_map(df, filteredData())
+      m
       
+      # bar chart
       crime_rank <- filteredData() %>%
         count(INCIDENT_TYPE) %>%
         arrange(desc(n))
       output$selectstat <- renderHighchart({
         
-        hchart(crime_rank, "bar", hcaes(INCIDENT_TYPE, n)) %>% 
-          hc_colors("SteelBlue") %>% 
-          hc_title(text = paste("Number of Incident Types in the Municipality of Surrey")) %>% 
-          hc_subtitle(text = "") %>% 
-          hc_xAxis(title = list(text = ""), gridLineWidth = 0, minorGridLineWidth = 0) %>% 
-          hc_yAxis(title = list(text = "Incidents"), gridLineWidth = 0, minorGridLineWidth = 0) %>%
-          hc_legend(enabled = FALSE) %>% 
-          hc_tooltip(pointFormat = "Incidents: <b>{point.y}</b>") %>% 
-          hc_plotOptions(series = list(cursor = "default")) %>% 
-          hc_add_theme(hc_theme_smpl()) %>% 
-          hc_chart(backgroundColor = "transparent")
+        highchart_barplot(crime_rank)
         
       })
+      
+      if(input$boundaries) {
+        
+        bins <- 
+        
+        m %>%
+          addPolygons(data = city_surrey)
+        
+        
+      }
+      
       
     } else if(length(input$incident) != 0 & 
               length(input$neighborhoods) != 0 &
@@ -154,19 +165,10 @@ server <- function(input, output, session) {
       crime_rank <- filteredData() %>%
         count(INCIDENT_TYPE) %>%
         arrange(desc(n))
+      
       output$selectstat <- renderHighchart({
         
-        hchart(crime_rank, "bar", hcaes(INCIDENT_TYPE, n)) %>% 
-          hc_colors("SteelBlue") %>% 
-          hc_title(text = paste("Number of Incident Types in the Municipality of Surrey")) %>% 
-          hc_subtitle(text = "") %>% 
-          hc_xAxis(title = list(text = ""), gridLineWidth = 0, minorGridLineWidth = 0) %>% 
-          hc_yAxis(title = list(text = "Incidents"), gridLineWidth = 0, minorGridLineWidth = 0) %>%
-          hc_legend(enabled = FALSE) %>% 
-          hc_tooltip(pointFormat = "Incidents: <b>{point.y}</b>") %>% 
-          hc_plotOptions(series = list(cursor = "default")) %>% 
-          hc_add_theme(hc_theme_smpl()) %>% 
-          hc_chart(backgroundColor = "transparent")
+        highchart_barplot(crime_rank)
         
       })
       
