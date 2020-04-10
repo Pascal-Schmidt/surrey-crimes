@@ -1,6 +1,14 @@
 library(shiny)
 library(leaflet)
 library(RColorBrewer)
+library(cancensus)
+
+options(cancensus.api_key = "CensusMapper_f8a7e66b1263cfd8596e73babf6cc6b1")
+city_surrey <- get_census(dataset = 'CA16', 
+                          regions = list(CSD = "5915004"), 
+                          vectors = c(), labels = "detailed", 
+                          geo_format = "sf", level = 'CSD')
+
 df <- readr::read_csv("final_df.csv") %>%
   tidyr::unite("date", YEAR, MONTH, sep = "-") %>%
   dplyr::mutate(date = lubridate::ymd(paste0(date, "-1"))) %>%
@@ -97,10 +105,14 @@ server <- function(input, output, session) {
         addCircleMarkers(clusterOptions = markerClusterOptions(),
                          stroke = FALSE, fill = TRUE, fillOpacity = .7,
                          color = ~leaf_pal(INCIDENT_TYPE),
-                         label = ~district) %>%
+                         popup = paste("'<strong>'Neighborhood: '</strong>'", filteredData()$district, "<br/>",
+                                       "<strong>Address: </strong>", filteredData()$HUNDRED_BLOCK, "<br/>",
+                                       "<strong>Postal Code: </strong>", filteredData()$postal_code, "<br/>", 
+                                       "<strong>Date: </strong>", filteredData()$date, "<br/>")) %>%
         addLegend("bottomright",
                   pal = leaf_pal,
-                  values = ~INCIDENT_TYPE, title = "Category")
+                  values = ~INCIDENT_TYPE, title = "Category") %>%
+        addPolygons(data = city_surrey)
       
     } else if(length(input$incident) != 0 & 
               length(input$neighborhoods) != 0 &
@@ -130,7 +142,10 @@ server <- function(input, output, session) {
         addCircleMarkers(clusterOptions = markerClusterOptions(),
                          stroke = FALSE, fill = TRUE, fillOpacity = .7,
                          color = ~leaf_pal(INCIDENT_TYPE),
-                         label = ~district) %>%
+                         popup = paste("'<strong>'Neighborhood: '</strong>'", filteredData()$district, "<br/>",
+                                       "<strong>Address: </strong>", filteredData()$HUNDRED_BLOCK, "<br/>",
+                                       "<strong>Postal Code: </strong>", filteredData()$postal_code, "<br/>", 
+                                       "<strong>Date: </strong>", filteredData()$date, "<br/>")) %>%
         addLegend("bottomright",
                   pal = leaf_pal,
                   values = ~INCIDENT_TYPE, title = "Category")
