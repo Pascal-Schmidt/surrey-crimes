@@ -63,8 +63,8 @@ server <- function(input, output, session) {
       
       # choose a postal code
       shiny::selectInput("postal", "Postal Code",
-                         choices = unique(df$postal_code), multiple = TRUE,
-                         selected = "")
+                         choices = unique(df$postal_code), 
+                         multiple = TRUE)
       
     }
     
@@ -85,22 +85,56 @@ server <- function(input, output, session) {
   # should be managed in its own observer.
   observe({
     
-    if(length(input$incident) != 0 & length(input$postal_code) != 0) {
-    
-    pal7 <- RColorBrewer::brewer.pal(7, "Set1")
-    leaf_pal <- colorFactor(palette = pal7, domain = df$INCIDENT_TYPE)
-    
-    leafletProxy("map", data = filteredData()) %>%
-      clearMarkerClusters() %>%
-      clearControls() %>%
-      addCircleMarkers(clusterOptions = markerClusterOptions(),
-                       stroke = FALSE, fill = TRUE, fillOpacity = .7,
-                       color = ~leaf_pal(INCIDENT_TYPE),
-                       label = ~district) %>%
-      addLegend("bottomright",
-                pal = leaf_pal,
-                values = ~INCIDENT_TYPE, title = "Category")
-    
+    if(length(input$incident) != 0 & 
+       length(input$neighborhoods) != 0 & !input$postal_code) {
+      
+      pal7 <- RColorBrewer::brewer.pal(7, "Set1")
+      leaf_pal <- colorFactor(palette = pal7, domain = df$INCIDENT_TYPE)
+      
+      leafletProxy("map", data = filteredData()) %>%
+        clearMarkerClusters() %>%
+        clearControls() %>%
+        addCircleMarkers(clusterOptions = markerClusterOptions(),
+                         stroke = FALSE, fill = TRUE, fillOpacity = .7,
+                         color = ~leaf_pal(INCIDENT_TYPE),
+                         label = ~district) %>%
+        addLegend("bottomright",
+                  pal = leaf_pal,
+                  values = ~INCIDENT_TYPE, title = "Category")
+      
+    } else if(length(input$incident) != 0 & 
+              length(input$neighborhoods) != 0 &
+              length(input$postal) != 0 & input$postal_code &
+              filteredData() %>%
+              dplyr::filter(postal_code %in% input$postal) %>%
+              dplyr::filter(district %in% input$neighborhoods) %>%
+              nrow(.) == 0) {
+      
+      showModal(modalDialog(title = "Sorry!", 
+                            tags$p("Your postal code is not in the selected neighborhood."),
+                            tags$p("Give another one a try or expand the number of neighborhoods.")))
+    } else if(length(input$incident) != 0 & 
+              length(input$neighborhoods) != 0 &
+              length(input$postal) != 0 & input$postal_code &
+              filteredData() %>%
+              dplyr::filter(postal_code %in% input$postal) %>%
+              dplyr::filter(district %in% input$neighborhoods) %>%
+              nrow(.) != 0) {
+      
+      pal7 <- RColorBrewer::brewer.pal(7, "Set1")
+      leaf_pal <- colorFactor(palette = pal7, domain = df$INCIDENT_TYPE)
+      
+      leafletProxy("map", data = filteredData()) %>%
+        clearMarkerClusters() %>%
+        clearControls() %>%
+        addCircleMarkers(clusterOptions = markerClusterOptions(),
+                         stroke = FALSE, fill = TRUE, fillOpacity = .7,
+                         color = ~leaf_pal(INCIDENT_TYPE),
+                         label = ~district) %>%
+        addLegend("bottomright",
+                  pal = leaf_pal,
+                  values = ~INCIDENT_TYPE, title = "Category")
+      
     } else {
       
       leafletProxy("map", data = filteredData()) %>%
