@@ -1,0 +1,13 @@
+name: testing
+title: testing
+username:
+account: pascalschmidt
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2098944
+bundleId: 2999270
+url: https://pascalschmidt.shinyapps.io/testing/
+when: 1586590752.89451
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: base_map.R|highcharter_barplot.R
