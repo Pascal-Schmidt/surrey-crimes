@@ -5,6 +5,7 @@ library(RColorBrewer)
 library(cancensus)
 library(lubridate)
 library(tidyverse)
+library(DT)
 source("base_map.R")
 source("highcharter_barplot.R")
 
@@ -22,10 +23,12 @@ df <- readr::read_csv("final_df.csv") %>%
 
 
 ui <- bootstrapPage(
-  
-  navbarPage("City of Surrey Map of Crime Incidents", id = "main",
+
+  navbarPage(title = "City of Surrey Map of Incident Types",
+            
              tabPanel("Map", 
                       style = "height:500px;",
+                      
                       
                       leafletOutput("map", width = "100%", height = "100%"),
                       absolutePanel(top = 70, right = 20, draggable = TRUE, fixed = TRUE,
@@ -60,7 +63,36 @@ ui <- bootstrapPage(
                                     shiny::checkboxInput("postal_code", "Search for Your Postal Code!"),
                                     shiny::uiOutput("postal_surrey"),
                                     
-                                    shiny::checkboxInput("boundaries", "Add Boundaries Around Surrey")))))
+                                    shiny::checkboxInput("boundaries", "Add Boundaries Around Surrey"))),
+             
+             tabPanel("Table", 
+                      
+                      sidebarLayout(
+                        
+                        # Sidebar panel for inputs ----
+                        sidebarPanel(
+                          
+                          shiny::selectInput("groupings", "Group Your Data",
+                                             choices =  c("Postal Code", "Incident Type",
+                                                          "Address", "Neighborhood"),
+                                             multiple = TRUE,
+                                             selected = "Incident Type"),
+                          
+                          shiny::radioButtons("year_month", label = "Crime Over Time",
+                                               choices = c("Monthly", "Yearly"),
+                                              selected = "")
+                        ),
+                        
+                        mainPanel(
+                          
+                          DT::dataTableOutput("data")
+                          
+                        )
+                      )
+                      
+             )
+                      #tabPanel("About", includeMarkdown("readme.md"))
+             ))
 
 server <- function(input, output, session) {
   
@@ -182,6 +214,72 @@ server <- function(input, output, session) {
     
   })
   
+  ###############################################################################
+  
+  ##### output table #####
+  output$data <- DT::renderDataTable({
+    
+    if(length(input$groupings) == 0) {
+      
+      filteredData() %>%
+        dplyr::mutate(date = as.character(date)) %>%
+        dplyr::select(`Incident Type` = INCIDENT_TYPE, `Postal Code` = postal_code,
+                      Address = HUNDRED_BLOCK, Neighborhood = district, Date = date)
+      
+    } else {
+      
+      input$year_month %>%
+        tolower() %>%
+        strsplit(split = "") %>%
+        unlist() %>%
+        .[1:(length(.) - 2)] %>%
+        paste0(collapse = "") -> y_m
+      
+      filteredData() %>%
+        dplyr::select(`Incident Type` = INCIDENT_TYPE, `Postal Code` = postal_code,
+                      Address = HUNDRED_BLOCK, Neighborhood = district, Date = date) %>%
+        dplyr::mutate(Date = lubridate::floor_date(Date, y_m)) %>%
+        dplyr::group_by_at(vars(c(input$groupings, "Date"))) %>%
+        dplyr::summarise(count = dplyr::n()) %>%
+        dplyr::arrange_at(vars(c(input$groupings, Date))) %>%
+        dplyr::mutate(`% closing` = round(c(NA, diff(count)) / count, 2) * 100) -> dat
+      
+      DT::datatable(
+        dat,
+        options = list(rowCallback = DT::JS(
+          'function(row, data) {
+          // Bold cells for those >= 5 in the first column
+          if (parseFloat(data[data.length - 1]) < 0)
+          $("td", row).last().css("color", "#f00");
+          else if (parseFloat(data[data.length - 1]) > 0)
+          $("td", row).last().css("color", "#0f0");
+    }'))
+      ) -> dat
+      
+      dat %>%
+        formatPercentage("% closing")
+      
+    }
+    
+    #   DT::datatable(
+    #     data,
+    #     options = list(rowCallback = DT::JS(
+    #       'function(row, data) {
+    #       // Bold cells for those >= 5 in the first column
+    #       if (parseFloat(data[9]) < 0)
+    #       $("td", row).last().css("color", "#f00");
+    #       else if (parseFloat(data[9]) > 0)
+    #       $("td", row).last().css("color", "#0f0");
+    # }'))
+    #   )
+    
+  })
+  
 }
-
 shinyApp(ui, server)
+
+
+df %>%
+  dplyr::mutate(Date = lubridate::floor_date(date, "year")) %>%
+  dplyr::group_by_at("Date") %>%
+  summarise(n = n())
