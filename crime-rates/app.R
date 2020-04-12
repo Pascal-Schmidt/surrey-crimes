@@ -167,9 +167,8 @@ ui <- bootstrapPage(
                         
                         column(4,
                                
-                               shiny::checkboxInput("by_groups", "Explore By Incident Type and More"),
-                               shiny::uiOutput("overall_ui")
-                               
+                               shiny::checkboxInput("by_groups", "Explore By Incident Type and More")
+                        
                                ),
                         
                         # Sidebar panel for inputs ----
@@ -205,23 +204,12 @@ ui <- bootstrapPage(
 
 server <- function(input, output, session) {
   
-  output$overall_ui <- renderUI({
-    
-    if(input$by_groups) {
-      
-      shiny::checkboxInput("overall", label = "Display Overall % Change")
-      
-    }
-    
-  })
-  
   output$groupings_ui <- renderUI({
     
     if(input$by_groups) {
       
       shiny::selectInput("groupings", "Group Your Data",
-                         choices =  c("Postal Code",
-                                      "Address", "Neighborhood"),
+                         choices =  c("Neighborhood", "Postal Code"),
                          multiple = TRUE,
                          selected = "")
       
@@ -371,17 +359,8 @@ server <- function(input, output, session) {
         dplyr::mutate(date = as.character(date)) %>%
         dplyr::select(`Incident Type` = INCIDENT_TYPE, `Postal Code` = postal_code,
                       Address = HUNDRED_BLOCK, Neighborhood = district, Date = date)
-      
-    } else if(input$overall) {
-      
-      table_fn(filteredData(), input$year_month, input$groupings) %>%
-        dplyr::mutate(`% closing` = round(c(rep(NA, length(count) - 1), 
-                                            (count[length(count)] - count[1]) / count[1]), 2)) %>%
-        data_table_fn()
-      
-    } 
     
-    else {
+    } else {
       
       table_fn(filteredData(), input$year_month, input$groupings) %>%
         dplyr::mutate(`% closing` = round(c(NA, diff(count)) / count, 2)) %>%
@@ -393,13 +372,13 @@ server <- function(input, output, session) {
   
   output$plot <- renderPlot({
     
-    if(length(input$year_month) == 0) {
+    if(!input$by_groups) {
       
       return()
       
     }
     
-    else if(length(input$groupings) == 2) {
+    else if(input$by_groups & length(input$groupings) == 0) {
       
       table_fn(filteredData(), input$year_month, input$groupings) %>%
         ggplot(aes(x = Date, y = count,
@@ -407,20 +386,16 @@ server <- function(input, output, session) {
         geom_point() +
         geom_line() +
         theme_economist_white() +
-        theme(legend.position = "top") +
-        facet_grid(~ eval(parse(input$groupings[2]))) +
-        xlab(paste0(input$groupings, collapse = "-")) +
-        ylab(length(input$groupings))
+        theme(legend.position = "top") 
       
-    } else {
+    } else if(input$by_groups & length(input$groupings) == 1) {
 
       table_fn(filteredData(), input$year_month, input$groupings) %>%
         ggplot(aes(x = Date, y = count,
                    col = `Incident Type`, group = `Incident Type`)) +
         geom_point() +
         geom_line() +
-        xlab(xlab(paste0(input$groupings, collapse = "-"))) +
-        ylab(length(input$groupings))
+        facet_grid(~ eval(parse(text = input$groupings)))
       
     }
 
