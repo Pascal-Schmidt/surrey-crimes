@@ -5,9 +5,15 @@ library(RColorBrewer)
 library(lubridate)
 library(dplyr)
 library(ggplot2)
-library(ggthemr)
+library(ggthemes)
 library(DT)
 library(sf)
+
+gg_facet_nrow <- function(p){
+  num_panels <- length(unique(ggplot_build(p)$data[[1]]$PANEL)) # get number of panels
+  num_cols <- ggplot_build(p)$layout$facet$params$ncol # get number of columns set by user
+  num_rows <- wrap_dims(num_panels, ncol=num_cols)[1] # determine number of rows
+}
 
 data_table_fn <- function(df) {
   
@@ -51,12 +57,6 @@ table_fn <- function(df, input_year_month, input_groupings) {
   
 }
 
-# base_ggplot_fn <- function(df) {
-#   
-#   
-#   
-# }
-
 base_map <- function(initial_df, filtered_df) {
   
   pal7 <- RColorBrewer::brewer.pal(7, "Set1")
@@ -68,7 +68,7 @@ base_map <- function(initial_df, filtered_df) {
     addCircleMarkers(clusterOptions = markerClusterOptions(),
                      stroke = FALSE, fill = TRUE, fillOpacity = .7,
                      color = ~leaf_pal(INCIDENT_TYPE),
-                     popup = paste("'<strong>'Neighborhood: '</strong>'", filtered_df$district, "<br/>",
+                     popup = paste("<strong>Neighborhood: </strong>", filtered_df$district, "<br/>",
                                    "<strong>Address: </strong>", filtered_df$HUNDRED_BLOCK, "<br/>",
                                    "<strong>Postal Code: </strong>", filtered_df$postal_code, "<br/>", 
                                    "<strong>Date: </strong>", filtered_df$date, "<br/>")) %>%
@@ -106,22 +106,33 @@ city_surrey <- sf::read_sf("city_surrey.shp")
 
 
 
-ui <- bootstrapPage(
+ui <- bootstrapPage(theme = "style.css",
+                div(style = "padding: 1px 0px; width: '100%'",
+                    titlePanel(
+                      title = "",
+                      windowTitle = "City of Surrey: Crime and Collision Incidents 2011-2020"
+                    )
+                ),
   
-  navbarPage(title = "City of Surrey Map of Incident Types",
+                navbarPage(
+                  
+                  # Application title.
+                  title = div(span(img(src = "surrey.png", height = 35),
+                                   "City of Surrey: Crime and Collision Incidents 2011-2020",
+                                   style = "position: relative; top: 50%; transform: translateY(-50%);")),
              
              tabPanel("Map", 
                       style = "height:500px;",
                       
                       
                       leafletOutput("map", width = "100%", height = "100%"),
-                      absolutePanel(top = 70, right = 20, draggable = TRUE, fixed = TRUE,
+                      absolutePanel(top = 90, right = 20, draggable = TRUE, fixed = TRUE,
                                     width = "20%", style = "z-index:500; min-width: 300px;",
                                     
-                                    highchartOutput("selectstat")),
+                                    highchartOutput("selectstat", height = "325px")),
                       
-                      absolutePanel(top = 150, left = 20, draggable = TRUE, fixed = TRUE,
-                                    width = "20%", style = "z-index:500; min-width: 200px;",
+                      absolutePanel(top = 170, left = 20, draggable = TRUE, fixed = TRUE,
+                                    width = "25%", style = "z-index:500; min-width: 200px;",
                                     
                                     
                                     # choose a date range
@@ -198,9 +209,10 @@ ui <- bootstrapPage(
                       )
                       
                       
-             )
-             #tabPanel("About", includeMarkdown("readme.md"))
-  ))
+             ),
+             tabPanel("About", includeMarkdown("about.md"))
+  )
+)
 
 server <- function(input, output, session) {
   
@@ -209,7 +221,7 @@ server <- function(input, output, session) {
     if(input$by_groups) {
       
       shiny::selectInput("groupings", "Group Your Data",
-                         choices =  c("Neighborhood", "Postal Code"),
+                         choices =  "Neighborhood",
                          multiple = TRUE,
                          selected = "")
       
@@ -363,14 +375,14 @@ server <- function(input, output, session) {
     } else {
       
       table_fn(filteredData(), input$year_month, input$groupings) %>%
-        dplyr::mutate(`% closing` = round(c(NA, diff(count)) / count, 2)) %>%
+        dplyr::mutate(`% Change of # of Incidents` = round(c(NA, diff(count)) / count, 2)) %>%
         data_table_fn()
       
     }
     
   })
   
-  output$plot <- renderPlot({
+  p <- reactive({
     
     if(!input$by_groups) {
       
@@ -395,11 +407,21 @@ server <- function(input, output, session) {
                    col = `Incident Type`, group = `Incident Type`)) +
         geom_point() +
         geom_line() +
-        facet_grid(~ eval(parse(text = input$groupings)))
+        facet_wrap(~ eval(parse(text = input$groupings)), 
+                   ncol = 2,
+                   scales = "free_y") +
+        theme_economist_white() +
+        theme(legend.position = "top",
+              plot.title = element_text(hjust = 0.5, size = 18)) +
+        ggtitle("Number of Incident Types By Neighborhood Over Time")
       
     }
 
   })
+  
+  he <- reactive(gg_facet_nrow(p()))
+  
+  output$plot <- renderPlot({p() }, height = function(){he()*300})
   
 }
 shinyApp(ui, server)
