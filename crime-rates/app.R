@@ -5,6 +5,7 @@ library(RColorBrewer)
 library(lubridate)
 library(dplyr)
 library(ggplot2)
+library(ggthemr)
 library(DT)
 library(sf)
 
@@ -42,9 +43,9 @@ table_fn <- function(df, input_year_month, input_groupings) {
     dplyr::select(`Incident Type` = INCIDENT_TYPE, `Postal Code` = postal_code,
                   Address = HUNDRED_BLOCK, Neighborhood = district, Date = date) %>%
     dplyr::mutate(Date = lubridate::floor_date(Date, yy_mm)) %>%
-    dplyr::group_by_at(vars(c(input_groupings, "Date"))) %>%
+    dplyr::group_by_at(vars(c("Incident Type", input_groupings, "Date"))) %>%
     dplyr::summarise(count = dplyr::n()) %>%
-    dplyr::arrange_at(vars(c(input_groupings, Date))) -> dat
+    dplyr::arrange_at(vars(c("Incident Type", input_groupings, Date))) -> dat
   
   return(dat)
   
@@ -152,25 +153,36 @@ ui <- bootstrapPage(
                       
                       fluidRow(
                         
+                        column(12,
+                               
+                               shiny::helpText("Group the Surrey crime data set by Incident Rates,
+                                               to see how the overall crime rate has been changing over time.
+                                               You also have the choice to group by additional variables in the data set.
+                                               Whenever you want to update the data you see in the table, go back to the map
+                                               tab on top and change the time span, add more neighborhoods of your choosing,
+                                               or look up a postal code you are particularily interested in. To explore the data
+                                               further, click the checkbox below. Enjoy the data exploration!")
+                               
+                               ),
+                        
+                        column(4,
+                               
+                               shiny::checkboxInput("by_groups", "Explore By Incident Type and More"),
+                               shiny::uiOutput("overall_ui")
+                               
+                               ),
+                        
                         # Sidebar panel for inputs ----
                         column(4,
                                
-                               shiny::selectInput("groupings", "Group Your Data",
-                                                  choices =  c("Postal Code", "Incident Type",
-                                                               "Address", "Neighborhood"),
-                                                  multiple = TRUE,
-                                                  selected = "Incident Type")
+                               shiny::uiOutput("groupings_ui")
+                               
                         ),
                         
                         column(4,  
-                               shiny::radioButtons("year_month", label = "Crime Over Time",
-                                                   choices = c("Monthly", "Yearly"),
-                                                   selected = "")
-                        ),
-                        
-                        column(4, 
-                               shiny::checkboxInput("overall", label = "Display Overall % Change"),
-                               shiny::checkboxInput("facet", label = "Display Graph By Neighborhood")
+                               
+                               shiny::uiOutput("year_month_ui")
+                               
                         ),
                         
                         column(12,
@@ -192,6 +204,42 @@ ui <- bootstrapPage(
   ))
 
 server <- function(input, output, session) {
+  
+  output$overall_ui <- renderUI({
+    
+    if(input$by_groups) {
+      
+      shiny::checkboxInput("overall", label = "Display Overall % Change")
+      
+    }
+    
+  })
+  
+  output$groupings_ui <- renderUI({
+    
+    if(input$by_groups) {
+      
+      shiny::selectInput("groupings", "Group Your Data",
+                         choices =  c("Postal Code",
+                                      "Address", "Neighborhood"),
+                         multiple = TRUE,
+                         selected = "")
+      
+    }
+    
+  })
+  
+  output$year_month_ui <- renderUI({
+    
+    if(input$by_groups) {
+      
+      shiny::radioButtons("year_month", label = "Crime Over Time",
+                          choices = c("Monthly", "Yearly"),
+                          selected = "Monthly")
+      
+    }
+    
+  })
   
   # Reactive expression for the data subsetted to what the user selected
   filteredData <- reactive({
@@ -317,7 +365,7 @@ server <- function(input, output, session) {
   ##### output table #####
   output$data <- DT::renderDataTable({
     
-    if(length(input$groupings) == 0 | length(input$year_month) == 0) {
+    if(!input$by_groups) {
       
       filteredData() %>%
         dplyr::mutate(date = as.character(date)) %>%
@@ -343,52 +391,40 @@ server <- function(input, output, session) {
     
   })
   
-  # output$plot <- renderPlot({
-  #   
-  #   if(input$facet) {
-  #     
-  #     
-  #     filteredData() %>%
-  #       dplyr::select(`Incident Type` = INCIDENT_TYPE, `Postal Code` = postal_code,
-  #                     Address = HUNDRED_BLOCK, Neighborhood = district, Date = date) %>%
-  #       dplyr::mutate(Date = lubridate::floor_date(Date, y_m)) %>%
-  #       dplyr::group_by_at(vars(c(input$groupings, "Date"))) %>%
-  #       dplyr::summarise(count = dplyr::n()) %>%
-  #       dplyr::arrange_at(vars(c(input$groupings, Date))) %>%
-  #       dplyr::mutate(`% closing` = round(c(NA, diff(count)) / count, 2)) -> dat
-  #   
-  #     ggplot(data = df, aes(x = Date, y = count, 
-  #                            col = `Incident Type`, group = `Incident Type`)) +
-  #       geom_point() +
-  #       geom_line() +
-  #       facet_wrap(~ Neighborhood)
-  #     
-  #   } else {
-  #     
-  #     input$year_month %>%
-  #       tolower() %>%
-  #       strsplit(split = "") %>%
-  #       unlist() %>%
-  #       .[1:(length(.) - 2)] %>%
-  #       paste0(collapse = "") -> y_m
-  #     
-  #     filteredData() %>%
-  #       dplyr::select(`Incident Type` = INCIDENT_TYPE, `Postal Code` = postal_code,
-  #                     Address = HUNDRED_BLOCK, Neighborhood = district, Date = date) %>%
-  #       dplyr::mutate(Date = lubridate::floor_date(Date, y_m)) %>%
-  #       dplyr::group_by_at(vars(c(input$groupings, "Date"))) %>%
-  #       dplyr::summarise(count = dplyr::n()) %>%
-  #       dplyr::arrange_at(vars(c(input$groupings, Date))) %>%
-  #       dplyr::mutate(`% closing` = round(c(NA, diff(count)) / count, 2)) -> dat
-  #     
-  #     ggplot(data = dat, aes(x = Date, y = count, 
-  #                            col = `Incident Type`, group = `Incident Type`)) +
-  #       geom_point() +
-  #       geom_line() 
-  #     
-  #   }
-  #   
-  # })
+  output$plot <- renderPlot({
+    
+    if(length(input$year_month) == 0) {
+      
+      return()
+      
+    }
+    
+    else if(length(input$groupings) == 2) {
+      
+      table_fn(filteredData(), input$year_month, input$groupings) %>%
+        ggplot(aes(x = Date, y = count,
+                   col = `Incident Type`, group = `Incident Type`)) +
+        geom_point() +
+        geom_line() +
+        theme_economist_white() +
+        theme(legend.position = "top") +
+        facet_grid(~ eval(parse(input$groupings[2]))) +
+        xlab(paste0(input$groupings, collapse = "-")) +
+        ylab(length(input$groupings))
+      
+    } else {
+
+      table_fn(filteredData(), input$year_month, input$groupings) %>%
+        ggplot(aes(x = Date, y = count,
+                   col = `Incident Type`, group = `Incident Type`)) +
+        geom_point() +
+        geom_line() +
+        xlab(xlab(paste0(input$groupings, collapse = "-"))) +
+        ylab(length(input$groupings))
+      
+    }
+
+  })
   
 }
 shinyApp(ui, server)
