@@ -8,6 +8,8 @@ library(ggplot2)
 library(ggthemes)
 library(DT)
 library(sf)
+library(feather)
+library(data.table)
 
 gg_facet_nrow <- function(p) {
   num_panels <- length(unique(ggplot_build(p)$data[[1]]$PANEL)) # get number of panels
@@ -98,10 +100,11 @@ highchart_barplot <- function(crime_rank) {
   return(bar)
 }
 
-df <- readr::read_csv("final_df.csv") %>%
-  tidyr::unite("date", YEAR, MONTH, sep = "-") %>%
-  dplyr::mutate(date = lubridate::ymd(paste0(date, "-1"))) %>%
-  dplyr::filter(lon > -123 & lon < -122 & lat < 49.5 & lat > 48.5)
+# use feather file to read in data faster
+df <- feather::read_feather("final_df.feather")
+
+# use data.table for faster filtering (reactive data inputs)
+df <- data.table(df)
 city_surrey <- sf::read_sf("city_surrey.shp")
 
 
@@ -153,8 +156,7 @@ ui <- bootstrapPage(
         # choose the incident type
         shiny::selectInput("incident", "Incident Type",
           choices = unique(df$INCIDENT_TYPE), multiple = TRUE,
-          selected = df %>%
-            dplyr::filter(district == "Whalley") %>%
+          selected = df[district == "Whalley"] %>%
             dplyr::pull(INCIDENT_TYPE) %>% {
               unique(.)[1:3]
             }
@@ -261,23 +263,23 @@ server <- function(input, output, session) {
   filteredData <- reactive({
     
     # filter for dates
-    df <- df[df$date >= input$range[1] & df$date <= input$range[2], ]
+    df <- df[date >= input$range[1] & date <= input$range[2]]
     
     # if we do not have include all neighborhoods checkbox checked,
     # then we have to filter for certain neighborhods. Otherwise,
     # every neighborhood is included and we do not have to filter.
     if(!input$all) {
-      df <- df[df$district %in% input$neighborhoods, ]
+      df <- df[district %in% input$neighborhoods]
     }
     
     # if checked, we can search for postal codes and therefore,
     # have to filter for postal codes. Otherwise we do not.
     if(input$postal_code) {
-      df <- df[df$postal_code %in% input$postal, ]
+      df <- df[postal_code %in% input$postal]
     }
     
     # filter for incident type
-    df <- df[df$INCIDENT_TYPE %in% input$incident, ]
+    df <- df[INCIDENT_TYPE %in% input$incident]
     df
     
   })
@@ -323,8 +325,9 @@ server <- function(input, output, session) {
         observe({
           leafletProxy("map", data = filteredData()) %>%
             addPolygons(
-              data = city_surrey, color = "green",
-              fill = FALSE
+              data = city_surrey, color = "green", 
+              smoothFactor = 0.2, weight = 1,
+              fill = FALSE, opacity = 1
             )
         })
       }
@@ -332,8 +335,8 @@ server <- function(input, output, session) {
       (length(input$neighborhoods) != 0 | input$all) &
       length(input$postal) != 0 & input$postal_code &
       filteredData() %>%
-        dplyr::filter(postal_code %in% input$postal) %>%
-        dplyr::filter(district %in% input$neighborhoods) %>%
+        .[postal_code %in% input$postal] %>%
+        .[district %in% input$neighborhoods] %>%
         nrow(.) == 0) {
       showModal(modalDialog(
         title = "Sorry!",
@@ -344,8 +347,8 @@ server <- function(input, output, session) {
       (length(input$neighborhoods) != 0 | input$all) &
       length(input$postal) != 0 & input$postal_code &
       filteredData() %>%
-        dplyr::filter(postal_code %in% input$postal) %>%
-        dplyr::filter(district %in% input$neighborhoods) %>%
+        .[postal_code %in% input$postal] %>%
+        .[district %in% input$neighborhoods] %>%
         nrow(.) != 0) {
       base_map(df, filteredData())
 
@@ -379,7 +382,7 @@ server <- function(input, output, session) {
         )
     } else {
       table_fn(filteredData(), input$year_month, input$groupings) %>%
-        dplyr::mutate(`% Change of # of Incidents` = round(c(NA, diff(count)) / count, 2)) %>%
+        dplyr::mutate(`% Change of # of Incidents` = round( c(NA, na.omit(c((diff(count)), NA) / count)), 2)) %>%
         data_table_fn()
     }
   })
