@@ -1,0 +1,26 @@
+.navbar-default .navbar-brand {
+  height: 50px;
+  font-size: 16pt;
+  color: green;
+}
+.navbar-nav {
+  height: 50px;
+  font-size: 14pt;
+  color: green;
+}
+.navbar-nav li {
+  height: 50px;
+  display: table;
+  color: green;
+}
+.navbar-nav li a {
+  height: 50px;
+  display: table-cell;
+  vertical-align: middle;
+  text-align: center;
+  color: green;
+}
+.nav-tabs {
+  font-size: 12pt;
+  color: green;
+}
