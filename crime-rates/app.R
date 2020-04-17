@@ -11,12 +11,14 @@ library(sf)
 library(feather)
 library(data.table)
 
+# function for getting how many time-series plots are going to be plotted
 gg_facet_nrow <- function(p) {
   num_panels <- length(unique(ggplot_build(p)$data[[1]]$PANEL)) # get number of panels
   num_cols <- ggplot_build(p)$layout$facet$params$ncol # get number of columns set by user
   num_rows <- wrap_dims(num_panels, ncol = num_cols)[1] # determine number of rows
 }
 
+# data table function that colors percentage change red and green
 data_table_fn <- function(df) {
   DT::datatable(
     df,
@@ -37,6 +39,7 @@ data_table_fn <- function(df) {
   return(dat)
 }
 
+# function for displaying table (yearly, monthly), by neighborhood or not
 table_fn <- function(df, input_year_month, input_groupings) {
   input_year_month %>%
     tolower() %>%
@@ -58,6 +61,7 @@ table_fn <- function(df, input_year_month, input_groupings) {
   return(dat)
 }
 
+# leaflet map
 base_map <- function(initial_df, filtered_df) {
   pal7 <- RColorBrewer::brewer.pal(7, "Set1")
   leaf_pal <- colorFactor(palette = pal7, domain = initial_df$INCIDENT_TYPE)
@@ -84,6 +88,7 @@ base_map <- function(initial_df, filtered_df) {
   return(base_map)
 }
 
+# bar plot
 highchart_barplot <- function(crime_rank) {
   bar <- hchart(crime_rank, "bar", hcaes(INCIDENT_TYPE, n)) %>%
     hc_colors("SteelBlue") %>%
@@ -110,6 +115,8 @@ city_surrey <- sf::read_sf("city_surrey.shp")
 
 
 ui <- bootstrapPage(
+  
+  # add city of surrey logo
   theme = "style.css",
   div(
     style = "padding: 1px 0px; width: '100%'",
@@ -130,12 +137,14 @@ ui <- bootstrapPage(
     tabPanel("Map",
       style = "height:500px;",
 
-
+      # keaflet map
       leafletOutput("map", width = "100%", height = "100%"),
+      
+      # highcharter bar plot
       absolutePanel(
         top = 90, right = 20, draggable = TRUE, fixed = TRUE,
         width = "25%", style = "z-index:500; min-width: 300px;",
-
+        
         highchartOutput("selectstat", height = "325px")
       ),
 
@@ -162,19 +171,30 @@ ui <- bootstrapPage(
             }
         ),
         
+        # if checkbox for choosing all neighborhoods is not selected,
+        # we can choose individual neighborhoods.
+        # disappears when checkbox all neighborhood is clicked
         shiny::uiOutput("district"),
+        
+        # choose to select all neighborhoods at once.
+
         shiny::checkboxInput("all", "Select all Neighborhoods of Surrey"),
-
+        
+        # checkbox for searching for specific neighborhoods
         shiny::checkboxInput("postal_code", "Search for Your Postal Code!"),
+        
+        # pops up when checkbox is clicked
         shiny::uiOutput("postal_surrey"),
-
+          
+        # add boundaries around surrey with shapefile
         shiny::checkboxInput("boundaries", "Add Boundaries Around Surrey")
       )
     ),
 
     tabPanel(
       "Table",
-
+      
+      # helpertext
       fluidRow(
         column(
           12,
@@ -187,32 +207,36 @@ ui <- bootstrapPage(
                                                or look up a postal code you are particularily interested in. To explore the data
                                                further, click the checkbox below. Enjoy the data exploration!")
         ),
-
+        
+        # by clicking this checkbox, many more options will appear
         column(
           4,
 
           shiny::checkboxInput("by_groups", "Explore By Incident Type and More")
         ),
 
-        # Sidebar panel for inputs ----
+        # group by neighborhood will appear
         column(
           4,
 
           shiny::uiOutput("groupings_ui")
         ),
 
+        # group by month or year will appear
         column(
           4,
 
           shiny::uiOutput("year_month_ui")
         ),
 
+        # data table output
         column(
           12,
 
           DT::dataTableOutput("data")
         ),
 
+        # time series plots will appear
         column(
           12,
 
@@ -220,12 +244,15 @@ ui <- bootstrapPage(
         )
       )
     ),
+    
+    # include a short project description
     tabPanel("About", includeMarkdown("about.md"))
   )
 )
 
 server <- function(input, output, session) {
   
+  # filter for specific neighborhoods
   output$district <- renderUI({
     
     if(!input$all) {
@@ -239,6 +266,7 @@ server <- function(input, output, session) {
     
   })
   
+  # group data table by neighborhood
   output$groupings_ui <- renderUI({
     if (input$by_groups) {
       shiny::selectInput("groupings", "Group Your Data",
@@ -249,6 +277,7 @@ server <- function(input, output, session) {
     }
   })
 
+  # group by month/year
   output$year_month_ui <- renderUI({
     if (input$by_groups) {
       shiny::radioButtons("year_month",
@@ -296,6 +325,7 @@ server <- function(input, output, session) {
   })
 
   output$map <- renderLeaflet({
+    
     # Use leaflet() here, and only include aspects of the map that
     # won't need to change dynamically (at least, not unless the
     # entire map is being torn down and recreated).
@@ -321,6 +351,8 @@ server <- function(input, output, session) {
         
       })
 
+      # if boundaries checkbox is being clicked, we are observing how 
+      # a boundary around surrey is drawn with shapefile
       if (input$boundaries) {
         observe({
           leafletProxy("map", data = filteredData()) %>%
@@ -331,6 +363,9 @@ server <- function(input, output, session) {
             )
         })
       }
+      
+      # if postal code is not in neighborhood we have filtered for,
+      # a message pops up
     } else if (length(input$incident) != 0 &
       (length(input$neighborhoods) != 0 | input$all) &
       length(input$postal) != 0 & input$postal_code &
@@ -343,6 +378,9 @@ server <- function(input, output, session) {
         tags$p("Your postal code is not in the selected neighborhood."),
         tags$p("Give another one a try or expand the number of neighborhoods.")
       ))
+      
+      # if postal code is in neighborhood,
+      # we add crimes to map that occur in filtered neighborhood
     } else if (length(input$incident) != 0 &
       (length(input$neighborhoods) != 0 | input$all) &
       length(input$postal) != 0 & input$postal_code &
@@ -359,6 +397,8 @@ server <- function(input, output, session) {
       output$selectstat <- renderHighchart({
         highchart_barplot(crime_rank)
       })
+      
+      # else, just draw the base map without anything on it
     } else {
       
       
@@ -373,6 +413,8 @@ server <- function(input, output, session) {
 
   ##### output table #####
   output$data <- DT::renderDataTable({
+    
+    # if checkbox is not clicked, just display data as seen in map
     if (!input$by_groups) {
       filteredData() %>%
         dplyr::mutate(date = as.character(date)) %>%
@@ -381,12 +423,15 @@ server <- function(input, output, session) {
           Address = HUNDRED_BLOCK, Neighborhood = district, Date = date
         )
     } else {
+      
+      # if checkbox is clicked, display percentages 
       table_fn(filteredData(), input$year_month, input$groupings) %>%
         dplyr::mutate(`% Change of # of Incidents` = round( c(NA, na.omit(c((diff(count)), NA) / count)), 2)) %>%
         data_table_fn()
     }
   })
-
+  
+  # if checkbox is not clicked, display nothing 
   p <- reactive({
     if (!input$by_groups) {
       
@@ -395,6 +440,8 @@ server <- function(input, output, session) {
       
     }
 
+    # if we do not group by neighborhood, we do not use facet_wrap,
+    # and only one plot is shown
     else if (input$by_groups & length(input$groupings) == 0) {
       table_fn(filteredData(), input$year_month, input$groupings) %>%
         ggplot(aes(
@@ -405,6 +452,11 @@ server <- function(input, output, session) {
         geom_line() +
         theme_economist_white() +
         theme(legend.position = "top")
+      
+      # if we group by neighborhood, then we facet by neighborhood and time-series
+      # plots for each neighborhood are being shown. We alsomake use of facet function
+      # to make each plot appear in a readable height without squishing plots when 
+      # adding neighborhoods
     } else if (input$by_groups & length(input$groupings) == 1) {
       table_fn(filteredData(), input$year_month, input$groupings) %>%
         ggplot(aes(
@@ -426,6 +478,7 @@ server <- function(input, output, session) {
     }
   })
 
+  # get the height of the plot. The more neighborhoods we select, the larger the plot output
   he <- reactive(
     
     if(input$by_groups & length(input$groupings) == 1) {
@@ -441,6 +494,7 @@ server <- function(input, output, session) {
 
   )
 
+  # disply plot
   output$plot <- renderPlot(
     {p()}, height = function() {he() * 300}
   )
