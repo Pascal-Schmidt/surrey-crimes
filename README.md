@@ -17,7 +17,7 @@
 - A very specific search can be done by looking for specific postal codes and crimes.
 - Besides the visual map with crimes, the app also features a table and time-series plots that show how crimes have been evolved over time in certain neighborhoods.
 
-Link to the [City of Surrey Crime and Collision Shiny Aplication](https://www.shinyapps.io/admin/#/application/2098944)
+Link to the [City of Surrey Crime and Collision Shiny Aplication](https://pascalschmidt.shinyapps.io/testing/)
 
 ## Follow Up
 
