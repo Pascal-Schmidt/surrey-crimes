@@ -14,11 +14,11 @@
 
 - The app is designed to inform the citizens of Surrey about crime and collision incidents in their municipality. 
 - We can zoom into different neighbohoods and postal codes by clicking on the circles.
-- A very specific serach can be done by searching for specific postal codes and crimes.
+- A very specific search can be done by looking for specific postal codes and crimes.
 - Besides the visual map with crimes, the app also features a table and time-series plots that show how crimes have been evolved over time in certain neighborhoods.
 
-Link to the (City of Surrey Crime and Collision Shiny Aplication)[https://www.shinyapps.io/admin/#/application/2098944]
+Link to the [City of Surrey Crime and Collision Shiny Aplication](https://www.shinyapps.io/admin/#/application/2098944)
 
 ## Follow Up
 
-- If you have any questions about the app, have recommendations, find any bugs, or find errors concerning certain address and neighborhoods, then you can email me: schmidtpascal553@googlemail.com. Thank you!
+- If you have any questions about the app, have recommendations, find any bugs, or find errors concerning certain address and neighborhoods, then you can email me at schmidtpascal553@googlemail.com. Thank you!
