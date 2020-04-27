@@ -1,3 +1,4 @@
+# R Shiny Application of Crime and Collision Data for the City of Surrey
 
 ## Data Collection
 
@@ -12,6 +13,11 @@
 ## Data Representation
 
 - The app is designed to inform the citizens of Surrey about crime and collision incidents in their municipality. 
+- We can zoom into different neighbohoods and postal codes by clicking on the circles.
+- A very specific serach can be done by searching for specific postal codes and crimes.
+- Besides the visual map with crimes, the app also features a table and time-series plots that show how crimes have been evolved over time in certain neighborhoods.
+
+Link to the (City of Surrey Crime and Collision Shiny Aplication)[https://www.shinyapps.io/admin/#/application/2098944]
 
 ## Follow Up
 
